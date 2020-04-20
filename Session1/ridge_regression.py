@@ -1,5 +1,6 @@
 import regex as re
 import numpy as np
+from sklearn.linear_model import Ridge
 
 
 def extract_data(readfile,writefile):
@@ -33,8 +34,80 @@ def normalized_and_add_one(X):
     X_normalized = np.concatenate((np.ones((X.shape[0], 1)), X_normalized),axis = 1)
     return X_normalized
 
-X_all, y_all = read_data("data.txt")
+
 class RidgeRegression:
     def __init__(self):
         return
-    def fit(self, ):
+    def fit(self, X_train, y_train, LAMBDA):
+        # print(X_train.shape, y_train.shape)
+        assert len(X_train.shape) == 2 and X_train.shape[0] == y_train.shape[0]
+        W = np.linalg.inv(np.dot(X_train.T, X_train) + LAMBDA*np.identity(X_train.shape[1])).dot(X_train.T).dot(y_train)
+        return W
+    def fit_gradient_descent(self, X_train, y_train, LAMBDA, learning_rate, max_num_epoch = 100, batch_size = 5):
+        W = np.random.randn(X_train.shape[1])
+        last_loss = 10e+8
+        for epoch in range(max_num_epoch):
+            arr = np.array(range(X_train.shape[0]))
+            np.random.shuffle(arr)
+            X_train = X_train[arr]
+            y_train = y_train[arr]
+            total_minibatch = int(np.ceil(X_train.shape[0]/batch_size))
+            for i in range(total_minibatch):
+                index = i*batch_size
+                X_train_sub = X_train[index:index + batch_size]
+                y_train_sub = y_train[index:index + batch_size]
+                grad = X_train_sub.T.dot(X_train_sub.dot(W) - y_train_sub) + LAMBDA * W
+                W = W - learning_rate * grad
+            new_loss = self.compute_RSS(self.predict(W, X_train), y_train)
+            if (np.abs(new_loss - last_loss) <= 1e-5):
+                break
+            last_loss = new_loss
+        return W
+    def compute_RSS(self,y, y_hat):
+        loss = (1. / y.shape[0]) * np.sum((y - y_hat)**2)
+        return loss
+    def predict(self, W, X):
+        y_hat = X.dot(W)
+        return y_hat
+    def get_the_best_LAMBDA(self, X_train, y_train):
+        def cross_validation(num_folds, LAMBDA):
+            row_ids = np.array(range(X_train.shape[0]))
+            valid_ids = np.split(row_ids[:len(row_ids) - len(row_ids) % num_folds], num_folds)
+            # print(valid_ids, len(row_ids))
+            valid_ids[-1] = np.append(valid_ids[-1], row_ids[len(row_ids) - len(row_ids) % num_folds:])
+            train_ids = [[k for k in row_ids if k not in valid_ids[i]] for i in range(num_folds)]
+            aver_RSS = 0
+            # print(valid_ids)
+            for i in range(num_folds):
+                valid_part = {'X' : X_train[valid_ids[i]], 'Y' : y_train[valid_ids[i]]}
+                train_part = {'X' : X_train[train_ids[i]], 'Y' : y_train[train_ids[i]]}
+                # print(train_part['Y'], i)
+                W = self.fit(train_part['X'], train_part['Y'], LAMBDA)
+                y_hat = self.predict(W, valid_part['X'])
+                aver_RSS += self.compute_RSS(valid_part['Y'], y_hat)
+            return aver_RSS/num_folds
+        def range_scan(best_LAMBDA, minimum_RSS, LAMBDA_values):
+            for current_LAMBDA in LAMBDA_values:
+                aver_RSS = cross_validation(num_folds=5, LAMBDA=current_LAMBDA)
+                if aver_RSS < minimum_RSS:
+                    best_LAMBDA = current_LAMBDA
+                    minimum_RSS = aver_RSS
+            return best_LAMBDA, minimum_RSS
+
+        best_LAMBDA, minimum_RSS = range_scan(0, 10000 ** 2, range(50))
+        LAMBDA_values = [k*1./1000 for k in range(max(0, (best_LAMBDA - 1)*1000), (best_LAMBDA + 1) * 1000,1)]
+        best_LAMBDA, minimum_RSS = range_scan(best_LAMBDA, minimum_RSS, LAMBDA_values)
+        return best_LAMBDA
+
+if __name__ == '__main__':
+    X_all, y_all = read_data("datasets/data.txt")
+    X_all = normalized_and_add_one(X_all)
+    X_train, y_train = X_all[:30], y_all[:30]
+    X_test, y_test = X_all[30:], y_all[30:]
+    ridge_regression = RidgeRegression()
+    best_LAMBDA = ridge_regression.get_the_best_LAMBDA(X_train, y_train)
+    print('Best LAMBDA: ', best_LAMBDA)
+    W_learned = ridge_regression.fit(X_train=X_train, y_train=y_train, LAMBDA=best_LAMBDA)
+    y_predict = ridge_regression.predict(W=W_learned, X=X_test)
+    print(ridge_regression.compute_RSS(y_test, y_predict))
+
