@@ -90,7 +90,7 @@ def get_tf_idf(data_path):
                                       for index, tf_idf_value in word_tfidfs]
             sparse_rep = ' '.join(word_tfidfs_normalized)
             data_tf_idf.append((label, doc_id, sparse_rep))
-    with open('./datasets/20news-bydate/tf-idf-train.txt','w') as f:
+    with open('./datasets/20news-bydate/tf-idf-full-processed.txt','w') as f:
         f.write('\n'.join([str(label) + '<fff>' + str(doc_id) + '<fff>' + str(sparse) for label, doc_id, sparse in data_tf_idf]))
 
-get_tf_idf('./datasets/20news-bydate/20news-train-processed.txt')
+get_tf_idf('./datasets/20news-bydate/20news-full-processed.txt')
