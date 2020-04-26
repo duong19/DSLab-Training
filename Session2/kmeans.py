@@ -73,4 +73,11 @@ class Kmeans:
         best_fit_cluster.add_members(member)
         return  max_similarity
     def update_centroid_of(self, cluster):
+        member_r_ds = [member._r_d for member in cluster._members]
+        aver_r_d = np.mean(member_r_ds, axis = 0)
+        sqrt_sum_sqr = np.sqrt(np.sum(aver_r_d ** 2))
+        new_centroid = np.array([value/sqrt_sum_sqr for value in aver_r_d])
+        cluster._centroid = new_centroid
+    def stopping_condition(self, criterion, threshold):
+
         

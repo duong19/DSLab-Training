@@ -34,7 +34,11 @@ def normalized_and_add_one(X):
     X_normalized = np.concatenate((np.ones((X.shape[0], 1)), X_normalized),axis = 1)
     return X_normalized
 
-
+def normalized(y):
+    y_max = np.max(y_all)
+    y_min = np.min(y_all)
+    y_normalized = (y - y_min)/(y_max - y_min)
+    return y_normalized
 class RidgeRegression:
     def __init__(self):
         return
@@ -102,12 +106,13 @@ class RidgeRegression:
 if __name__ == '__main__':
     X_all, y_all = read_data("datasets/data.txt")
     X_all = normalized_and_add_one(X_all)
+    y_all = normalized(y_all)
     X_train, y_train = X_all[:30], y_all[:30]
     X_test, y_test = X_all[30:], y_all[30:]
     ridge_regression = RidgeRegression()
     best_LAMBDA = ridge_regression.get_the_best_LAMBDA(X_train, y_train)
     print('Best LAMBDA: ', best_LAMBDA)
-    W_learned = ridge_regression.fit(X_train=X_train, y_train=y_train, LAMBDA=best_LAMBDA)
+    W_learned = ridge_regression.fit_gradient_descent(X_train=X_train, y_train=y_train, LAMBDA=best_LAMBDA, learning_rate=0.01)
     y_predict = ridge_regression.predict(W=W_learned, X=X_test)
     print(ridge_regression.compute_RSS(y_test, y_predict))
 
