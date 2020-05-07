@@ -1,6 +1,7 @@
 from collections import defaultdict
 
 import numpy as np
+import os
 
 
 class Member:
@@ -23,7 +24,7 @@ class Kmeans:
         self._num_clusters = num_clusters
         self._clusters = [Cluster() for _ in range(self._num_clusters)]
         self._E = []
-        self._S = []
+        self._S = 0
     def load_data(self, data_path):
         def sparse_to_dense(sparse_r_d, vocab_size):
             r_d = [0.0 for _ in range(vocab_size)]
@@ -36,7 +37,7 @@ class Kmeans:
 
         with open(data_path) as f:
             d_lines = f.read().splitlines()
-        with open('./datasets/20news-bydate/word-idfs.txt') as f:
+        with open('./datasets/20news-bydate/words_idfs.txt','r') as f:
             vocab_size = len(f.read().splitlines())
         self._data = []
         self._label_count = defaultdict(int)
@@ -46,6 +47,18 @@ class Kmeans:
             self._label_count[label] += 1
             r_d = sparse_to_dense(sparse_r_d=features[2], vocab_size=vocab_size)
             self._data.append(Member(r_d=r_d, label=label, doc_id=doc_id))
+    def random_init(self, seed_value):
+        np.random.seed(seed_value)
+        data = np.array(self._data)
+        data_centroids = data[np.random.choice(range(len(self._data)), self._num_clusters, replace=False)]
+        list(data_centroids)
+        for i, member in enumerate(data_centroids):
+            self._clusters[i]._centroid = member._r_d
+    def compute_similarity(self,member, centroid):
+        a = np.dot(member._r_d.T, centroid)
+        b = np.linalg.norm(member._r_d)*np.linalg.norm(centroid)
+        return a/b
+        
     def run(self, seed_value, criterion, threshold):
         self.random_init(seed_value)
 
@@ -59,6 +72,9 @@ class Kmeans:
                 self._new_S += max_s
             for cluster in self._clusters:
                 self.update_centroid_of(cluster)
+            if self._iteration % 10 == 0:
+                print('NMI: ', self.compute_NMI())
+                print('Purity: ', self.compute_purity())
             self._iteration += 1
             if self.stopping_condition(criterion, threshold):
                 break
@@ -67,11 +83,11 @@ class Kmeans:
         max_similarity = -1
         for cluster in self._clusters:
             similarity = self.compute_similarity(member, cluster._centroid)
-            if similarity > max_similarity
+            if similarity > max_similarity:
                 max_similarity = similarity
                 best_fit_cluster = cluster
         best_fit_cluster.add_members(member)
-        return  max_similarity
+        return max_similarity
     def update_centroid_of(self, cluster):
         member_r_ds = [member._r_d for member in cluster._members]
         aver_r_d = np.mean(member_r_ds, axis = 0)
@@ -79,5 +95,56 @@ class Kmeans:
         new_centroid = np.array([value/sqrt_sum_sqr for value in aver_r_d])
         cluster._centroid = new_centroid
     def stopping_condition(self, criterion, threshold):
+        criteria = ["centroid", "similarity", "max_iters"]
+        assert criterion in criteria
+        if criterion == "max_iters":
+            if self._iteration >= threshold:
+                return True
+            else:
+                return False
+        elif criterion == "centroid":
+            E_new = [list(cluster._centroid) for cluster in self._clusters]
+            E_new_minus_E = [centroid for centroid in E_new if centroid not in self._E]
+            self._E = E_new
+            if (len(E_new_minus_E) <= threshold):
+                return True
+            else:
+                return False
+        else:
+            new_S_minus_S = self._new_S - self._S
+            self._S = self._new_S
+            if new_S_minus_S <= threshold:
+                return True
+            else:
+                return False
+    def compute_purity(self):
+        majority_sum = 0
+        for cluster in self._clusters:
+            member_labels = [member._label for member in cluster._members]
+            max_count = max([member_labels.count(label) for label in range(20)])
+            majority_sum += max_count
+        return majority_sum * 1. / len(self._data)
+
+    def compute_NMI(self):
+        I_value, H_omega, H_C, N = 0., 0., 0., len(self._data)
+        for cluster in self._clusters:
+            wk = len(cluster._members) * 1.
+            H_omega += - wk / N * np.log10(wk / N)
+            member_labels = [member._label
+                             for member in cluster._members]
+            for label in range(20):
+                wk_cj = member_labels.count(label) * 1.
+                cj = self._label_count[label]
+                I_value += wk_cj / N * np.log10(N * wk_cj / (wk * cj) + 1e-12)
+        for label in range(20):
+            cj = self._label_count[label] * 1.
+            H_C += - cj / N * np.log10(cj / N)
+        return I_value * 2. / (H_omega + H_C)
+
+
+if __name__ == "__main__":
+    kmeans = Kmeans(20)
+    kmeans.load_data("./datasets/20news-bydate/tf-idf-full-processed.txt")
+    kmeans.run(1, 'max_iters', 100)
 
         

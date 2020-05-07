@@ -47,7 +47,7 @@ class RidgeRegression:
         assert len(X_train.shape) == 2 and X_train.shape[0] == y_train.shape[0]
         W = np.linalg.inv(np.dot(X_train.T, X_train) + LAMBDA*np.identity(X_train.shape[1])).dot(X_train.T).dot(y_train)
         return W
-    def fit_gradient_descent(self, X_train, y_train, LAMBDA, learning_rate, max_num_epoch = 100, batch_size = 5):
+    def fit_gradient_descent(self, X_train, y_train, LAMBDA, learning_rate=0.005, max_num_epoch = 100, batch_size = 5):
         W = np.random.randn(X_train.shape[1])
         last_loss = 10e+8
         for epoch in range(max_num_epoch):
@@ -86,7 +86,7 @@ class RidgeRegression:
                 valid_part = {'X' : X_train[valid_ids[i]], 'Y' : y_train[valid_ids[i]]}
                 train_part = {'X' : X_train[train_ids[i]], 'Y' : y_train[train_ids[i]]}
                 # print(train_part['Y'], i)
-                W = self.fit(train_part['X'], train_part['Y'], LAMBDA)
+                W = self.fit_gradient_descent(train_part['X'], train_part['Y'], LAMBDA)
                 y_hat = self.predict(W, valid_part['X'])
                 aver_RSS += self.compute_RSS(valid_part['Y'], y_hat)
             return aver_RSS/num_folds
@@ -106,13 +106,14 @@ class RidgeRegression:
 if __name__ == '__main__':
     X_all, y_all = read_data("datasets/data.txt")
     X_all = normalized_and_add_one(X_all)
-    y_all = normalized(y_all)
-    X_train, y_train = X_all[:30], y_all[:30]
-    X_test, y_test = X_all[30:], y_all[30:]
+    #y_all = normalized(y_all)
+    X_train, y_train = X_all[:50], y_all[:50]
+    X_test, y_test = X_all[50:], y_all[50:]
     ridge_regression = RidgeRegression()
     best_LAMBDA = ridge_regression.get_the_best_LAMBDA(X_train, y_train)
     print('Best LAMBDA: ', best_LAMBDA)
-    W_learned = ridge_regression.fit_gradient_descent(X_train=X_train, y_train=y_train, LAMBDA=best_LAMBDA, learning_rate=0.01)
+    W_learned = ridge_regression.fit_gradient_descent(X_train=X_train, y_train=y_train, LAMBDA=best_LAMBDA)
     y_predict = ridge_regression.predict(W=W_learned, X=X_test)
     print(ridge_regression.compute_RSS(y_test, y_predict))
+
 
