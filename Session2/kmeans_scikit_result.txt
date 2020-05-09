@@ -1,0 +1,2 @@
+Purity Kmeans:  0.4259789875835721
+Accuracy Linear SVM:  0.8255443441317047

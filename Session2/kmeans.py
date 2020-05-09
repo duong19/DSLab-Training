@@ -1,32 +1,34 @@
 from collections import defaultdict
 
 import numpy as np
-import os
+
 
 
 class Member:
     def __init__(self, r_d, label=None, doc_id=None):
-        self._r_d = r_d
-        self._label = label
-        self._doc_id = doc_id
+        self._r_d = r_d                             #vector tf_idf of document d
+        self._label = label                         #news group id of document d
+        self._doc_id = doc_id                       #file id of document d
 
 class Cluster:
     def __init__(self):
-        self._centroid = None
+        self._centroid = None                       #centroid of cluster
+        self._members = []                          #list of members of cluster
+    def reset_members(self):                        #reset list of member to empty
         self._members = []
-    def reset_members(self):
-        self._members = []
-    def add_members(self, member):
+    def add_members(self, member):                  #add member to list of member
         self._members.append(member)
 
 class Kmeans:
     def __init__(self, num_clusters):
-        self._num_clusters = num_clusters
-        self._clusters = [Cluster() for _ in range(self._num_clusters)]
-        self._E = []
-        self._S = 0
+        self._num_clusters = num_clusters                                       #number of clusters
+        self._clusters = [Cluster() for _ in range(self._num_clusters)]         #list of clusters
+        self._E = []                                                            #list of centroids
+        self._S = 0                                                             #similarity of all clusters
+    # load data from file
     def load_data(self, data_path):
         def sparse_to_dense(sparse_r_d, vocab_size):
+        #create vector tf_idf for document d
             r_d = [0.0 for _ in range(vocab_size)]
             indices_tfidfs = sparse_r_d.split()
             for index_tfidf in indices_tfidfs:
@@ -47,6 +49,7 @@ class Kmeans:
             self._label_count[label] += 1
             r_d = sparse_to_dense(sparse_r_d=features[2], vocab_size=vocab_size)
             self._data.append(Member(r_d=r_d, label=label, doc_id=doc_id))
+    # random initialize value for clusters from dataset
     def random_init(self, seed_value):
         np.random.seed(seed_value)
         data = np.array(self._data)
@@ -55,10 +58,9 @@ class Kmeans:
         for i, member in enumerate(data_centroids):
             self._clusters[i]._centroid = member._r_d
     def compute_similarity(self,member, centroid):
-        a = np.dot(member._r_d.T, centroid)
-        b = np.linalg.norm(member._r_d)*np.linalg.norm(centroid)
-        return a/b
-        
+        s = np.dot(member._r_d, centroid)
+        return s
+    #run kmeans algorithms
     def run(self, seed_value, criterion, threshold):
         self.random_init(seed_value)
 
@@ -72,12 +74,12 @@ class Kmeans:
                 self._new_S += max_s
             for cluster in self._clusters:
                 self.update_centroid_of(cluster)
-            if self._iteration % 10 == 0:
-                print('NMI: ', self.compute_NMI())
-                print('Purity: ', self.compute_purity())
             self._iteration += 1
             if self.stopping_condition(criterion, threshold):
+                print('NMI: ', self.compute_NMI())
+                print('Purity: ', self.compute_purity())
                 break
+    #assign member to cluster
     def select_cluster_for(self, member):
         best_fit_cluster = None
         max_similarity = -1
@@ -94,6 +96,7 @@ class Kmeans:
         sqrt_sum_sqr = np.sqrt(np.sum(aver_r_d ** 2))
         new_centroid = np.array([value/sqrt_sum_sqr for value in aver_r_d])
         cluster._centroid = new_centroid
+    #select stopping condition for kmeans
     def stopping_condition(self, criterion, threshold):
         criteria = ["centroid", "similarity", "max_iters"]
         assert criterion in criteria
@@ -145,6 +148,6 @@ class Kmeans:
 if __name__ == "__main__":
     kmeans = Kmeans(20)
     kmeans.load_data("./datasets/20news-bydate/tf-idf-full-processed.txt")
-    kmeans.run(1, 'max_iters', 100)
+    kmeans.run(2019, 'max_iters', 30)
 
         
