@@ -16,7 +16,7 @@ class DataReader:
         for data_id, line in enumerate(d_lines):
             vector = [0.0 for _ in range(vocab_size)]
             features = line.split('<fff>')
-            label, doc_id = features[0], features[1]
+            label, doc_id = int(features[0]), int(features[1])
             tokens = features[2].split()
             for token in tokens:
                 id, val = int(token.split(':')[0]), float(token.split(':')[1])
@@ -42,7 +42,7 @@ class DataReader:
             random.seed(2020)
             random.shuffle(indices)
             self._data, self._labels = self._data[indices], self._labels[indices]
-        return self._data[start:end], self._labels[start:end]
+        return np.array(self._data[start:end]), np.array(self._labels[start:end])
 
 
 #
@@ -106,7 +106,7 @@ def load_dataset():
         vocab_size=vocab_size
     )
     test_data_reader = DataReader(
-        data_path='./datasets/20news-bydate/tf-idf-train.txt',
+        data_path='./datasets/20news-bydate/tf-idf-test.txt',
         batch_size=50,
         vocab_size=vocab_size
     )
@@ -120,6 +120,7 @@ def save_parameters(name, value, epoch):
         string_form = '\n'.join([','.join([str(number) for number in value[row]]) for row in range(value.shape[0])])
     with open('./saved_paras/' + filename,'w') as f:
         f.write(string_form)
+    return epoch
 #restore parameters from file
 def restore_parameter(name, epoch):
     filename = name.replace(':', '-colon-') + '-epoch-{}.txt'.format(epoch)
@@ -143,7 +144,7 @@ if __name__ == "__main__":
     #train model with MAX_STEP = 1000
     with tf.Session() as sess:
         train_data_reader, test_data_reader = load_dataset()
-        step, MAX_STEP = 0, 1000
+        step, MAX_STEP = 0, 5000
         sess.run(tf.global_variables_initializer())
         while step < MAX_STEP:
             train_data, train_labels = train_data_reader.next_batch()
@@ -158,7 +159,7 @@ if __name__ == "__main__":
             print('step: {},loss: {}'.format(step, loss_eval))
         trainable_variables = tf.trainable_variables()
         for variable in trainable_variables:
-            save_parameters(
+            ep = save_parameters(
                 name=variable.name,
                 value=variable.eval(),
                 epoch=train_data_reader._num_epoch
@@ -169,7 +170,7 @@ if __name__ == "__main__":
         vocab_size=vocab_size
     )
     with tf.Session() as sess:
-        epoch = 4
+        epoch = ep
         trainable_variables = tf.trainable_variables()
         for variable in trainable_variables:
             saved_value = restore_parameter(variable.name, epoch)
@@ -191,6 +192,8 @@ if __name__ == "__main__":
                 break
         print('Epoch: ', epoch)
         print('Accuracy on test data: ', num_true_preds/len(test_data_reader._data))
+        with open('./result.txt','w') as f:
+            f.write('Epoch: {}, Accuracy: {}'.format(epoch, num_true_preds/len(test_data_reader._data)))
 
 
 
