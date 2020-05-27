@@ -144,7 +144,7 @@ if __name__ == "__main__":
     #train model with MAX_STEP = 1000
     with tf.Session() as sess:
         train_data_reader, test_data_reader = load_dataset()
-        step, MAX_STEP = 0, 5000
+        step, MAX_STEP = 0, 1000**2
         sess.run(tf.global_variables_initializer())
         while step < MAX_STEP:
             train_data, train_labels = train_data_reader.next_batch()
@@ -157,6 +157,8 @@ if __name__ == "__main__":
             )
             step += 1
             print('step: {},loss: {}'.format(step, loss_eval))
+            if loss_eval <= 1e-6:
+                break
         trainable_variables = tf.trainable_variables()
         for variable in trainable_variables:
             ep = save_parameters(
