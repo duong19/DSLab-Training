@@ -4,7 +4,7 @@ from collections import defaultdict
 
 
 MAX_DOC_LENGTH = 500
-unknown_ID = 1
+unknown_ID = 0
 padding_ID = 0
 def gen_data_and_vocab():
     def collect_data_from(parent_path, newsgroup_list, word_count=None):
@@ -86,3 +86,5 @@ def encode_data(data_path, vocab_path):
         f.write('\n'.join(encoded_data))
 
 
+# encode_data('./datasets/w2v/20news-test-raw.txt', './datasets/w2v/vocab-raw.txt')
+# encode_data('./datasets/w2v/20news-train-raw.txt', './datasets/w2v/vocab-raw.txt')

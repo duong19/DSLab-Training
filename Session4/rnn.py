@@ -2,10 +2,11 @@ import tensorflow.compat.v1 as tf
 import numpy as np
 from utils import gen_data_and_vocab, encode_data, MAX_DOC_LENGTH
 import random
+tf.disable_eager_execution()
 
 NUM_CLASSES = 20
 class DataReader:
-    def __init__(self, data_path, batch_size, vocab_size):
+    def __init__(self, data_path, batch_size):
         self._batch_size = batch_size
         with open(data_path) as f:
             d_lines = f.read().splitlines()
@@ -20,13 +21,15 @@ class DataReader:
             label, doc_id, sentence_len = int(features[0]), int(features[1]), int(features[2])
             tokens = features[3].split()
             for token in tokens:
-                vector.append(tf.int32(token))
-            self._final_tokens.append(vector[-1])
+                vector.append(float(token))
+            # self._final_tokens.append(vector[-1])
+            self._sentence_lengths.append(sentence_len)
             self._data.append(vector)
             self._labels.append(label)
         self._data = np.array(self._data)
         self._labels = np.array(self._labels)
-
+        self._sentence_lengths = np.array(self._sentence_lengths)
+        self._final_tokens = np.array(self._final_tokens)
         self._num_epoch = 0
         self._batch_id = 0
     #shuffle data and make batch size
@@ -36,7 +39,6 @@ class DataReader:
         self._batch_id += 1
 
         if end + self._batch_size > len(self._data):
-            end = len(self._data)
             self._num_epoch += 1
             self._batch_id = 0
             indices = list(range(len(self._data)))
@@ -148,7 +150,7 @@ class RNN:
 
 
 def train_and_evaluate_RNN():
-    with open('./datasets/w2v/vocab_w2v.txt') as f:
+    with open('./datasets/w2v/vocab-raw.txt') as f:
         vocab_size = len(f.read().splitlines())
 
     tf.set_random_seed(2020)
@@ -159,7 +161,7 @@ def train_and_evaluate_RNN():
         batch_size=50
     )
     loss, predicted_labels = rnn.build_graph()
-    train_op = rnn.trainer()
+    train_op = rnn.trainer(loss=loss, learning_rate=0.001)
     with tf.Session() as sess:
         train_data_reader = DataReader(
             data_path='./datasets/w2v/20news-train-encoded.txt',
@@ -175,20 +177,62 @@ def train_and_evaluate_RNN():
         sess.run(tf.global_variables_initializer())
         while step < MAX_STEP:
             next_train_batch = train_data_reader.next_batch()
-            train_data, train_labels, sentence_length, final_tokens = next_train_batch
-            plabels_eval, loss_eval = sess.run(
+            train_data, train_labels, train_sentence_length, train_final_tokens = next_train_batch
+            # print(train_sentence_length)
+            plabels_eval, loss_eval, _ = sess.run(
                 [predicted_labels, loss, train_op],
                 feed_dict={
                     rnn._data: train_data,
                     rnn._labels: train_labels,
-                    rnn._sentence_length: sentence_length,
-                    rnn._final_tokens: final_tokens
+                    rnn._sentence_length: train_sentence_length,
+                    # rnn._final_tokens: train_final_tokens
                 }
             )
             step += 1
             if step % 20 == 0:
                 print('Step: {}, loss: {}'.format(step,loss_eval))
-            if train_data_reader._current_
+            # if train_data_reader._batch_id == 0:
+            #     num_true_preds = 0
+            #     while True:
+            #         next_test_batch = test_data_reader.next_batch()
+            #         test_data, test_labels, test_sentence_length, test_final_tokens = next_test_batch
+            #
+            #         test_plabels_eval = sess.run(
+            #             predicted_labels,
+            #             feed_dict={
+            #                 rnn._data: test_data,
+            #                 rnn._labels: test_labels,
+            #                 rnn._sentence_length: test_sentence_length
+            #                 # rnn._final_tokens: test_final_tokens
+            #             }
+            #         )
+            #         matches = np.equal(test_plabels_eval, test_labels)
+            #         num_true_preds += np.sum(matches.astype(float))
+            #
+            #         if test_data_reader._batch_id == 0:
+            #             break
+            #     print("Epoch: ", train_data_reader._num_epoch)
+            #     print("Accuracy on test data: ", num_true_preds*100/len(test_data_reader._data))
+        num_true_preds = 0
+        while True:
+            next_test_batch = test_data_reader.next_batch()
+            test_data, test_labels, test_sentence_length, test_final_tokens = next_test_batch
 
+            test_plabels_eval = sess.run(
+                predicted_labels,
+                feed_dict={
+                    rnn._data: test_data,
+                    rnn._labels: test_labels,
+                    rnn._sentence_length: test_sentence_length
+                    # rnn._final_tokens: test_final_tokens
+                }
+            )
+            matches = np.equal(test_plabels_eval, test_labels)
+            num_true_preds += np.sum(matches.astype(float))
 
-
+            if test_data_reader._batch_id == 0:
+                break
+        print("Epoch: ", train_data_reader._num_epoch)
+        print("Accuracy on test data: ", num_true_preds * 100 / len(test_data_reader._data))
+if __name__ == '__main__':
+    train_and_evaluate_RNN()
