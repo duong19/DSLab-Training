@@ -1,10 +1,12 @@
 import tensorflow.compat.v1 as tf
 import numpy as np
-from utils import gen_data_and_vocab, encode_data, MAX_DOC_LENGTH
+from utils import MAX_DOC_LENGTH, encode_data, gen_data_and_vocab
 import random
 tf.disable_eager_execution()
 
 NUM_CLASSES = 20
+
+#doc du lieu tu file
 class DataReader:
     def __init__(self, data_path, batch_size):
         self._batch_size = batch_size
@@ -22,7 +24,7 @@ class DataReader:
             tokens = features[3].split()
             for token in tokens:
                 vector.append(float(token))
-            # self._final_tokens.append(vector[-1])
+            self._final_tokens.append(vector[-1])
             self._sentence_lengths.append(sentence_len)
             self._data.append(vector)
             self._labels.append(label)
@@ -59,6 +61,9 @@ class RNN:
         self._labels = tf.placeholder(tf.int32, shape=[batch_size, ])
         self._sentence_length = tf.placeholder(tf.int32, shape=[batch_size, ])
         self._final_tokens = tf.placeholder(tf.int32, shape=[batch_size, ])
+        self._learning_rate = tf.placeholder(tf.float32, shape=[])
+
+    #xay dung layer embedding du lieu
     def embedding_layer(self, data):
         pretrained_vectors = []
         pretrained_vectors.append(np.zeros(self._embedding_size))
@@ -74,6 +79,7 @@ class RNN:
             initializer=tf.constant_initializer(pretrained_vectors)
         )
         return tf.nn.embedding_lookup(self._embedding_matrix, data)
+    #xay dung LSTM layer
     def LSTM_layer(self, embeddings):
         lstm_cell = tf.nn.rnn_cell.BasicLSTMCell(self._lstm_size)
         zero_state = tf.zeros(shape=(self._batch_size, self._lstm_size))
@@ -113,7 +119,7 @@ class RNN:
         )
         return lstm_output_average
 
-
+    #xay dung mo hinh
     def build_graph(self):
         embeddings = self.embedding_layer(self._data)
         lstm_output = self.LSTM_layer(embeddings)
@@ -144,8 +150,8 @@ class RNN:
         predicted_labels = tf.squeeze(predicted_labels)
         return loss, predicted_labels
 
-    def trainer(self, loss, learning_rate):
-        train_op = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss)
+    def trainer(self, loss):
+        train_op = tf.train.AdamOptimizer(learning_rate=self._learning_rate).minimize(loss)
         return train_op
 
 
@@ -161,7 +167,7 @@ def train_and_evaluate_RNN():
         batch_size=50
     )
     loss, predicted_labels = rnn.build_graph()
-    train_op = rnn.trainer(loss=loss, learning_rate=0.001)
+    train_op = rnn.trainer(loss=loss)
     with tf.Session() as sess:
         train_data_reader = DataReader(
             data_path='./datasets/w2v/20news-train-encoded.txt',
@@ -176,8 +182,9 @@ def train_and_evaluate_RNN():
 
         sess.run(tf.global_variables_initializer())
         while step < MAX_STEP:
+            lr = 0.01
             next_train_batch = train_data_reader.next_batch()
-            train_data, train_labels, train_sentence_length, train_final_tokens = next_train_batch
+            train_data, train_labels, train_sentence_length, _ = next_train_batch
             # print(train_sentence_length)
             plabels_eval, loss_eval, _ = sess.run(
                 [predicted_labels, loss, train_op],
@@ -185,38 +192,42 @@ def train_and_evaluate_RNN():
                     rnn._data: train_data,
                     rnn._labels: train_labels,
                     rnn._sentence_length: train_sentence_length,
+                    rnn._learning_rate: lr
                     # rnn._final_tokens: train_final_tokens
                 }
             )
             step += 1
             if step % 20 == 0:
                 print('Step: {}, loss: {}'.format(step,loss_eval))
-            # if train_data_reader._batch_id == 0:
-            #     num_true_preds = 0
-            #     while True:
-            #         next_test_batch = test_data_reader.next_batch()
-            #         test_data, test_labels, test_sentence_length, test_final_tokens = next_test_batch
-            #
-            #         test_plabels_eval = sess.run(
-            #             predicted_labels,
-            #             feed_dict={
-            #                 rnn._data: test_data,
-            #                 rnn._labels: test_labels,
-            #                 rnn._sentence_length: test_sentence_length
-            #                 # rnn._final_tokens: test_final_tokens
-            #             }
-            #         )
-            #         matches = np.equal(test_plabels_eval, test_labels)
-            #         num_true_preds += np.sum(matches.astype(float))
-            #
-            #         if test_data_reader._batch_id == 0:
-            #             break
-            #     print("Epoch: ", train_data_reader._num_epoch)
-            #     print("Accuracy on test data: ", num_true_preds*100/len(test_data_reader._data))
+            #danh gia accuracy sau moi epoch
+            if train_data_reader._batch_id == 0:
+                lr *= (1. / (1 + (lr / train_data_reader._num_epoch) * step))
+                num_true_preds = 0
+                while True:
+                    next_test_batch = test_data_reader.next_batch()
+                    test_data, test_labels, test_sentence_length, test_final_tokens = next_test_batch
+
+                    test_plabels_eval = sess.run(
+                        predicted_labels,
+                        feed_dict={
+                            rnn._data: test_data,
+                            rnn._labels: test_labels,
+                            rnn._sentence_length: test_sentence_length
+                            # rnn._final_tokens: test_final_tokens
+                        }
+                    )
+                    matches = np.equal(test_plabels_eval, test_labels)
+                    num_true_preds += np.sum(matches.astype(float))
+
+                    if test_data_reader._batch_id == 0:
+                        break
+                print("Epoch: ", train_data_reader._num_epoch)
+                print("Accuracy on test data: ", num_true_preds*100/len(test_data_reader._data))
+        #danh gia accuracy sau khi train
         num_true_preds = 0
         while True:
             next_test_batch = test_data_reader.next_batch()
-            test_data, test_labels, test_sentence_length, test_final_tokens = next_test_batch
+            test_data, test_labels, test_sentence_length, _ = next_test_batch
 
             test_plabels_eval = sess.run(
                 predicted_labels,
@@ -234,5 +245,10 @@ def train_and_evaluate_RNN():
                 break
         print("Epoch: ", train_data_reader._num_epoch)
         print("Accuracy on test data: ", num_true_preds * 100 / len(test_data_reader._data))
+        with open('./result.txt','w') as f:
+            f.write('Epoch: {}, Accuracy on test data: {}'.format(train_data_reader._num_epoch, \
+                                                                  num_true_preds * 100 / len(test_data_reader._data)))
 if __name__ == '__main__':
+    encode_data('./datasets/w2v/20news-test-raw.txt', './datasets/w2v/vocab-raw.txt')
+    ncode_data('./datasets/w2v/20news-train-raw.txt', './datasets/w2v/vocab-raw.txt')
     train_and_evaluate_RNN()

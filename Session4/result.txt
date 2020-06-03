@@ -1,0 +1,1 @@
+Epoch: 4, Accuracy on test data: 75.94264471587891
