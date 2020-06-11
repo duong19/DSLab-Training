@@ -76,39 +76,44 @@ class RNN:
         return tf.nn.embedding_lookup(self._embedding_matrix, indices)
     #xay dung LSTM layer
     def LSTM_layer(self, embeddings):
-        lstm_cell = tf.nn.rnn_cell.BasicLSTMCell(self._lstm_size)
-        zero_state = tf.zeros(shape= (self._batch_size, self._lstm_size)) 
-        initial_state = tf.nn.rnn_cell.LSTMStateTuple(zero_state, zero_state) 
-        lstm_inputs = tf.unstack(tf.transpose(embeddings, perm= [1, 0, 2]))  
-                                                                              
-        lstm_outputs, last_state = tf.nn.static_rnn(
-              cell= lstm_cell,
-              inputs= lstm_inputs,
-              initial_state= initial_state,
-               sequence_length= self._sentence_lengths
-        )
-        lstm_outputs = tf.unstack(tf.transpose(lstm_outputs, perm= [1, 0, 2]))
-        lstm_outputs = tf.concat(lstm_outputs, axis= 0)
-
-        mask = tf.sequence_mask(
+      lstm_fw_cell = tf.nn.rnn_cell.BasicLSTMCell(self._lstm_size)
+      lstm_bw_cell = tf.nn.rnn_cell.BasicLSTMCell(self._lstm_size)
+      zero_state = tf.zeros(shape=(self._batch_size, self._lstm_size))
+      initial_fw_state = tf.nn.rnn_cell.LSTMStateTuple(zero_state, zero_state)
+      initial_bw_state = tf.nn.rnn_cell.LSTMStateTuple(zero_state, zero_state)  
+      
+      lstm_inputs = tf.unstack(
+                tf.transpose(embeddings, perm=[1,0,2])
+            )
+      lstm_outputs, _, _ = tf.nn.static_bidirectional_rnn(
+                cell_fw=lstm_fw_cell,
+                cell_bw=lstm_bw_cell,
+                inputs=lstm_inputs,
+                initial_state_fw=initial_fw_state,
+                initial_state_bw=initial_bw_state,
+                sequence_length=self._sentence_lengths
+            )
+      lstm_outputs = tf.unstack(tf.transpose(lstm_outputs, perm= [1, 0, 2]))
+      lstm_outputs = tf.concat(lstm_outputs, axis= 0)
+      mask = tf.sequence_mask(
               lengths= self._sentence_lengths,
               maxlen= MAX_DOC_LENGTH,
               dtype = tf.float32
         )
-        mask = tf.concat(tf.unstack(mask, axis= 0), axis= 0)
-        mask = tf.expand_dims(mask, -1)
-        lstm_outputs  = mask * lstm_outputs
-        lstm_outputs_split = tf.split(lstm_outputs, num_or_size_splits= self._batch_size)
-        lstm_outputs_sum = tf.reduce_sum(lstm_outputs_split, axis= 1)
-        lstm_outputs_average = lstm_outputs_sum / tf.expand_dims(tf.cast(self._sentence_lengths, tf.float32), -1)
-        return lstm_outputs_average
+      mask = tf.concat(tf.unstack(mask, axis= 0), axis= 0)
+      mask = tf.expand_dims(mask, -1)
+      lstm_outputs  = mask * lstm_outputs
+      lstm_outputs_split = tf.split(lstm_outputs, num_or_size_splits= self._batch_size)
+      lstm_outputs_sum = tf.reduce_sum(lstm_outputs_split, axis= 1)
+      lstm_outputs_average = lstm_outputs_sum / tf.expand_dims(tf.cast(self._sentence_lengths, tf.float32), -1)
+      return lstm_outputs_average
     #xay dung mo hinh
     def build_graph(self):
         embeddings = self.embedding_layer(self._data)
         lstm_outputs = self.LSTM_layer(embeddings)
 
         weights = tf.get_variable(name= 'final_layer_weights',
-                                shape= (self._lstm_size, NUM_CLASSES),
+                                shape= (2*self._lstm_size, NUM_CLASSES),
                                 initializer= tf.random_normal_initializer(seed= 1999))
 
         biases = tf.get_variable( name= 'final_layer_biases',
@@ -208,7 +213,7 @@ def train_and_evaluate_RNN():
             num_true_preds += np.sum(matches.astype(float))
             if test_data_reader._batch_id == 0:
                 break
-        with open('./result.txt','w') as f:
+        with open('./bi-rnn-result.txt','w') as f:
           f.write('Epoch: {}, Accuracy on test data: {}'.format(train_data_reader._num_epoch, \
                                                                   num_true_preds * 100 / len(test_data_reader._data)))
         
